@@ -45,16 +45,19 @@ class ASMEnv(gym.Env):
         # action space is a list of gym Spaces, length num_agents
         self._action_space = [spaces.Discrete(5) for _ in range(self.num_agents)]
         # observations are agent coordinates and evictions
-        if self.is_global_obs:
-            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
-                shape=(self.width, self.height), dtype=np.int32),
-                spaces.MultiBinary(self.num_agents)))
-        else:
-            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
-                shape=(self.obs_width, self.obs_height), dtype=np.int32),
-                spaces.MultiBinary(self.num_agents)))
-
-        # observation sspace is a list of gym Spaces, length num_agents
+        # if self.is_global_obs:
+        #     single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
+        #         shape=(self.width, self.height), dtype=np.int32),
+        #         spaces.MultiBinary(self.num_agents)))
+        # else:
+        #     single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
+        #         shape=(self.obs_width, self.obs_height), dtype=np.int32),
+        #         spaces.MultiBinary(self.num_agents)))
+        # observations are an array containing, for each agent, their coords
+        # and a bool representing whether they've been evicted
+        single_agent_obs = spaces.Box(low=0, high=self.height-1,
+            shape=(self.num_agents, 3), dtype=np.int32)
+        # observation space is a list of gym Spaces, length num_agents
         self._observation_space = [single_agent_obs
             for _ in range(self.num_agents)]
 
@@ -62,7 +65,7 @@ class ASMEnv(gym.Env):
         self.moves = ((0, -1), (1, 0), (0, 1), (-1, 0))
 
         self.step_count = None
-        self.agent_positions = []
+        self.agent_positions = None
         self.world_state = None
         self.evictions = None
         self.agent_farming_history = None
@@ -104,7 +107,7 @@ class ASMEnv(gym.Env):
                 continue
             #agent_action = one_hot_to_index(actions[ind])
             agent_action = actions[ind]
-            curr_agent_position = self.agent_positions[ind]
+            curr_agent_position = self.agent_positions[ind, :]
             if agent_action == 4:
                 agent_reward = self.mine_or_farm(curr_agent_position, ind)
                 reward[ind] = agent_reward
@@ -119,7 +122,7 @@ class ASMEnv(gym.Env):
                         self.world_state[new_pos[0], new_pos[1], 1] = ind
                         # remove from old pos
                         self.world_state[curr_agent_position[0], curr_agent_position[1], 1] = -1
-                        self.agent_positions[ind] = new_pos[0], new_pos[1]
+                        self.agent_positions[ind, :] = new_pos[0], new_pos[1]
 
         obs = self.get_observations()
         done = self.step_count >= self.episode_length
@@ -167,28 +170,29 @@ class ASMEnv(gym.Env):
         return np.random.binomial(n=1.0, p=prob_of_success)
 
     def get_observations(self):
-        obs = []
-        for ind in range(self.num_agents):
-            if self.is_global_obs:
-                agent_obs = (self.world_state[:, :, 1], self.evictions)
-            else:
-                x, y = self.agent_positions[ind]
-                local_height_rad = self.observation_height//2
-                local_width_rad = self.observation_width//2
-                local_obs = self.world_state[
-                    x-local_width_rad:x+local_width_rad+1,
-                    y-local_height_rad:x+local_height_rad+1,
-                    1]
-                agent_obs = (local_obs, self.evictions)
-            obs.append(agent_obs)
-        return obs
+        # obs = []
+        # for ind in range(self.num_agents):
+        #     if self.is_global_obs:
+        #         agent_obs = (self.world_state[:, :, 1], self.evictions)
+        #     else:
+        #         x, y = self.agent_positions[ind, :]
+        #         local_height_rad = self.observation_height//2
+        #         local_width_rad = self.observation_width//2
+        #         local_obs = self.world_state[
+        #             x-local_width_rad:x+local_width_rad+1,
+        #             y-local_height_rad:x+local_height_rad+1,
+        #             1]
+        #         agent_obs = (local_obs, self.evictions)
+        #     obs.append(agent_obs)
+        # return obs
+        return [np.concatenate([self.agent_positions, self.evictions[:,np.newaxis]], axis=1) for _ in range(self.num_agents)]
 
     def evict(self):
         # randomly evict one agent that is on mining side to farming side
         shuffled_agent_indices = np.arange(self.num_agents)
         np.random.shuffle(shuffled_agent_indices)
         for ind in shuffled_agent_indices:
-            coords = self.agent_positions[ind]
+            coords = self.agent_positions[ind, :]
             # look for first mining agent
             if self.get_grid_type(coords) == MINING:
                 while True:
@@ -203,7 +207,7 @@ class ASMEnv(gym.Env):
                         self.world_state[x, y, 1] = ind
                         # set previous position to -1
                         self.world_state[coords[0], coords[1], 1] = -1
-                        self.agent_positions[ind] = x, y
+                        self.agent_positions[ind, :] = x, y
                         # note the eviction
                         self.evictions = np.zeros(
                             (self.num_agents,), dtype=np.int32)
@@ -236,7 +240,7 @@ class ASMEnv(gym.Env):
         self.agent_farming_history = np.zeros(
             (self.num_agents,), dtype=np.int32)
         # initialize agent positions
-        self.agent_positions = [None for _ in range(self.num_agents)]
+        self.agent_positions = np.zeros((self.num_agents, 2), dtype=np.int32)
         for ind in range(self.num_agents):
             while True:
                 x = np.random.choice(self.width)
@@ -245,7 +249,7 @@ class ASMEnv(gym.Env):
                 if self.world_state[x, y, 1] < 0:
                     # update agent position
                     self.world_state[x,  y, 1] = ind
-                    self.agent_positions[ind] = x, y
+                    self.agent_positions[ind, :] = x, y
                     break
         obs = self.get_observations()
         return obs

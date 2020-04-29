@@ -64,8 +64,9 @@ if __name__ == '__main__':
                 env.render()
                 actions = []
                 for i in range(num_agents):
-                    # temp convergence solution to have agent speaker be fixed
-                    agent_action = agents[i].act(observation[i], reward[i]) # this probably wont converge
+                    # observation
+                    q_agent_obs = observation[i].tobytes() # make hashable
+                    agent_action = agents[i].act(q_agent_obs, reward[i]) # this probably wont converge
                     actions.append(int(agent_action))
 
                 observation, reward, done, info = env.step(actions)
