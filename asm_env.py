@@ -19,48 +19,57 @@ class ASMEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, num_agents, terminate_after=5000,
+    def __init__(self, num_agents, episode_length=5000,
             subsidy_timesteps=1000, evict_every=40,
-            subsidy_prob_amount=0.5, mining_prob_bounds=[0.4, 0.75],
-            global_obs=True):
+            subsidy_prob_amount=0.2, mining_prob_bounds=[0.4, 0.75], alpha=20,
+            is_global_obs=True, reset_mining_probs_every_ep=True):
         super(ASMEnv, self).__init__()
+
         self._num_agents = num_agents
-        self.terminate_after = terminate_after
+        self.episode_length = episode_length
         self.subsidy_timesteps = subsidy_timesteps
         self.evict_every = evict_every
         self.subsidy_prob_amount = subsidy_prob_amount
         self.mining_prob_bounds = mining_prob_bounds
+        self.is_global_obs = is_global_obs # whether the observation is global
+        self.reset_mining_probs_every_ep = reset_mining_probs_every_ep
+        self.alpha = alpha # tweaks farming reward curve y=x/x+a
+
         self.width = 20
         self.height = 20
         self.mining_height = 8
         self.farming_height = 8
         self.obs_width = 7
         self.obs_height = 7
-        # define it for one agent
-        #self.action_space = spaces.MultiDiscrete([NUM_AGENTS, 5])
+
+        # action space is a list of gym Spaces, length num_agents
         self._action_space = [spaces.Discrete(5) for _ in range(self.num_agents)]
-        self.global_obs = global_obs
-        # observations are mining history and agent coordinates and evictions
-        if self.global_obs:
-            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=terminate_after,
-                shape=(self.width, self.height, 2), dtype=np.int32),
+        # observations are agent coordinates and evictions
+        if self.is_global_obs:
+            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
+                shape=(self.width, self.height), dtype=np.int32),
                 spaces.MultiBinary(self.num_agents)))
         else:
-            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=terminate_after,
-                shape=(self.obs_width, self.obs_height, 2), dtype=np.int32),
+            single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
+                shape=(self.obs_width, self.obs_height), dtype=np.int32),
                 spaces.MultiBinary(self.num_agents)))
+
+        # observation sspace is a list of gym Spaces, length num_agents
         self._observation_space = [single_agent_obs
             for _ in range(self.num_agents)]
-        # up, right, down, left in (x, y) coords
+
+        # up, right, down, left in terms of (x, y) coords
         self.moves = ((0, -1), (1, 0), (0, 1), (-1, 0))
 
         self.step_count = None
         self.agent_positions = []
         self.world_state = None
         self.evictions = None
-        self.mining_probs = None
+        self.agent_farming_history = None
 
-        # begin in start state, initialize vars
+        # initialize mining probabilities
+        self.reset_mining_probs()
+
         self.reset()
 
     @property
@@ -97,7 +106,7 @@ class ASMEnv(gym.Env):
             agent_action = actions[ind]
             curr_agent_position = self.agent_positions[ind]
             if agent_action == 4:
-                agent_reward = self.mine_or_farm(curr_agent_position)
+                agent_reward = self.mine_or_farm(curr_agent_position, ind)
                 reward[ind] = agent_reward
             else:
                 x_move, y_move = self.moves[agent_action]
@@ -113,19 +122,25 @@ class ASMEnv(gym.Env):
                         self.agent_positions[ind] = new_pos[0], new_pos[1]
 
         obs = self.get_observations()
-        done = self.step_count >= self.terminate_after
+        done = self.step_count >= self.episode_length
         info = [{} for _ in range(self.num_agents)]
 
         return obs, reward, done, info
 
-    def mine_or_farm(self, coords):
+    def mine_or_farm(self, coords, agent_id):
         grid_type = self.get_grid_type(coords)
         if grid_type == MINING:
             reward = self.get_mining_reward(coords)
-            prev_num_miners = self.world_state[coords[0], coords[1], 0]
-            self.world_state[coords[0], coords[1], 0] = prev_num_miners + 1
+            # keep track of mining history if successfully mined
+            if reward:
+                prev_num_miners = self.world_state[coords[0], coords[1], 0]
+                self.world_state[coords[0], coords[1], 0] = prev_num_miners + 1
         elif grid_type == FARMING:
-            reward = self.get_farming_reward(coords)
+            reward = self.get_farming_reward(coords, agent_id)
+            # keep track of farming history if successfully farmed
+            if reward:
+                prev_num_farmers = self.world_state[coords[0], coords[1], 0]
+                self.world_state[coords[0], coords[1], 0] = prev_num_farmers + 1
         else:
             reward = 0
         return reward
@@ -143,8 +158,9 @@ class ASMEnv(gym.Env):
         prob_of_success = self.mining_probs[coords[0], coords[1]]
         return np.random.binomial(n=1.0, p=prob_of_success)
 
-    def get_farming_reward(self, coords):
-        prob_of_success = self.step_count/float(self.terminate_after)
+    def get_farming_reward(self, coords, agent_id):
+        x = self.agent_farming_history[agent_id]
+        prob_of_success = x/float(x+self.alpha)
         if self.step_count < self.subsidy_timesteps:
             prob_of_success_subsidized = min(prob_of_success + self.subsidy_prob_amount, 1.0)
             return np.random.binomial(n=1.0, p=prob_of_success_subsidized)
@@ -152,21 +168,20 @@ class ASMEnv(gym.Env):
 
     def get_observations(self):
         obs = []
-        if self.global_obs:
-            return [(self.world_state, self.evictions)
-                for _ in range(self.num_agents)]
-        else:
-            obs = []
-            for ind in range(self.num_agents):
+        for ind in range(self.num_agents):
+            if self.is_global_obs:
+                agent_obs = (self.world_state[:, :, 1], self.evictions)
+            else:
                 x, y = self.agent_positions[ind]
                 local_height_rad = self.observation_height//2
                 local_width_rad = self.observation_width//2
                 local_obs = self.world_state[
                     x-local_width_rad:x+local_width_rad+1,
                     y-local_height_rad:x+local_height_rad+1,
-                    :]
-                obs.append((local_obs, self.evictions))
-            return obs
+                    1]
+                agent_obs = (local_obs, self.evictions)
+            obs.append(agent_obs)
+        return obs
 
     def evict(self):
         # randomly evict one agent that is on mining side to farming side
@@ -196,22 +211,30 @@ class ASMEnv(gym.Env):
                         return ind
         return None
 
-
-    def reset(self):
-        # reset the state to initial state
-        self.step_count = 0
+    def reset_mining_probs(self):
+        """Resets mining probabilities. Can choose when this is done."""
         self.mining_probs = (self.mining_prob_bounds[1] -
             self.mining_prob_bounds[0]) * np.random.random(
             size=(self.width, self.height)) + self.mining_prob_bounds[0]
         self.mining_probs[:, self.mining_height:] = 0
-        # initialize world state - for each grid theres a mining history, and
+
+    def reset(self):
+        # reset the state to initial state
+        self.step_count = 0
+        if self.reset_mining_probs_every_ep:
+            self.reset_mining_probs()
+        # initialize world state - for each grid theres a mining/farming history, and
         # indication of which agent if any is in the grid (0 to
         # NUM_AGENTS-1 to represent each agent, and -1 if no agent)
         self.world_state = np.zeros(
             (self.width, self.height, 2), dtype=np.int32)
         # initialize with "no agents" anywhere
         self.world_state[:, :, 1] = -1
+        # evictions in previous timestep
         self.evictions = np.zeros((self.num_agents,), dtype=np.int32)
+        # history of farming for each agent
+        self.agent_farming_history = np.zeros(
+            (self.num_agents,), dtype=np.int32)
         # initialize agent positions
         self.agent_positions = [None for _ in range(self.num_agents)]
         for ind in range(self.num_agents):

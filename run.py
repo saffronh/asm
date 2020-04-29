@@ -37,7 +37,7 @@ if __name__ == '__main__':
     steps_per_episode = 500
     num_agents = 3
 
-    env = ASMEnv(num_agents=num_agents, terminate_after=steps_per_episode,
+    env = ASMEnv(num_agents=num_agents, episode_length=steps_per_episode,
         subsidy_timesteps=steps_per_episode//10, evict_every=75)
     #agents = [RandomAgent(env.action_space[0]) for _ in range(num_agents)]
     # these agents require strings for actions
@@ -54,12 +54,11 @@ if __name__ == '__main__':
 
     for ep in range(epochs):
         print("Epoch number: %d" % ep)
-        observation = env.reset()
-        reward = [0] * num_agents
         done = False
         for t in range(episodes):
             print("Episode number: %d" % t)
-
+            observation = env.reset()
+            reward = [0] * num_agents
             # one episode
             while not done:
                 env.render()
