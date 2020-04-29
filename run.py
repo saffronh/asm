@@ -38,7 +38,7 @@ if __name__ == '__main__':
     num_agents = 3
 
     env = ASMEnv(num_agents=num_agents, episode_length=steps_per_episode,
-        subsidy_timesteps=steps_per_episode//10, evict_every=25)
+        subsidy_timesteps=steps_per_episode//5, evict_every=25)
     #agents = [RandomAgent(env.action_space[0]) for _ in range(num_agents)]
     # these agents require strings for actions
     actions = [str(i) for i in range(5)]

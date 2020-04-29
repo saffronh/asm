@@ -2,16 +2,34 @@ import gym
 from gym import spaces
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 # grid type enums
 MINING = 1
 FARMING = 2
 NEITHER = 0
 
+DEFAULT_COLOURS = {' ': [0, 0, 0],  # Black background
+                   '': [180, 180, 180],  # Grey board walls
+                   '@': [180, 180, 180],  # Grey eviction
+                   'F': [0, 255, 0],  # Green farming ground
+                   'M': [255, 255, 0],  # Yellow mining ground
+
+                   # Colours for agents. R value is a unique identifier
+                   '0': [159, 67, 255],  # Purple
+                   '1': [2, 81, 154],  # Blue
+                   '2': [254, 151, 0],  # Orange
+                   '3': [204, 0, 204],  # Magenta
+                   '4': [216, 30, 54],  # Red
+                   '5': [100, 255, 255],  # Cyan
+                   '6': [99, 99, 255],  # Lavender
+                   '7': [250, 204, 255],  # Pink
+                   '8': [238, 223, 16]}  # Yellow
+
 def one_hot_to_index(arr):
     if arr.ndim != 1 and arr.shape[1] > 1:
         raise InputError("Must be 1D array or 2D array with 2nd dim as 1")
-    arr.astype(int)
+    arr = arr.astype(int)
     arr_as_list = list(np.reshape(arr, -1))
     return arr_as_list.index(1)
 
@@ -19,8 +37,8 @@ class ASMEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, num_agents, episode_length=5000,
-            subsidy_timesteps=1000, evict_every=40,
+    def __init__(self, num_agents, episode_length=1000,
+            subsidy_timesteps=250, evict_every=40,
             subsidy_prob_amount=0.5, mining_prob_bounds=[0.4, 0.75], alpha=20,
             is_global_obs=True, reset_mining_probs_every_ep=True):
         super(ASMEnv, self).__init__()
@@ -263,6 +281,39 @@ class ASMEnv(gym.Env):
         return np.sum(self.world_state[:, -self.farming_height:, 0])
 
 
-    def render(self, mode="human", close=False):
-        # render environment to the screen
-        return
+    def render(self, mode="human", filename=None, close=False):
+        """ Creates an image of the map to plot or save."""
+        rgb_arr = self.get_rgb()
+        plt.imshow(rgb_arr, interpolation='nearest')
+        if filename is None:
+            plt.show()
+        else:
+            plt.savefig(filename)
+
+
+    def get_rgb(self):
+        """Returns rgb map of space"""
+        rgb_arr = np.zeros((self.width, self.height, 3))
+        for i in range(self.width):
+            for j in range(self.height):
+                grid_type = self.get_grid_type((i, j))
+                if grid_type == MINING:
+                    mine_amount = self.world_state[i, j, 0]
+                    scale = max((500-mine_amount)/500, 0.3)
+                    rgb_val = [x * scale for x in DEFAULT_COLOURS['M']]
+                    rgb_arr[i, j, :] = rgb_val
+                elif grid_type == FARMING:
+                    farm_amount = self.world_state[i, j, 0]
+                    scale = max((500-farm_amount)/500, 0.3)
+                    rgb_val = [x * scale for x in DEFAULT_COLOURS['F']]
+                    rgb_arr[i, j, :] = rgb_val
+                else:
+                    rgb_arr[i, j, :] = DEFAULT_COLOURS[' ']
+
+        for agent_ind in range(self.num_agents):
+            x, y = self.agent_positions[agent_ind]
+            rgb_arr[x, y, :] = DEFAULT_COLOURS[str(agent_ind)]
+
+        rgb_arr = np.around(rgb_arr)
+        return rgb_arr.astype(int)
+
