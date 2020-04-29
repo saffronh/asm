@@ -73,7 +73,9 @@ if __name__ == '__main__':
                 for i in range(num_agents):
                     cum_reward[i] += reward[i]
                 #time.sleep(1) # for testing purposes; remove for faster episodes
-            print("Cum reward: ", cum_reward)
+            print("Cumulative reward: ", cum_reward)
+            print("Mining amount: ", env.get_cumulative_mining_amount())
+            print("Farming amount: ", env.get_cumulative_farming_amount())
             for agent in agents:
                 agent.end_of_episode()
 
