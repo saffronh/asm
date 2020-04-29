@@ -21,7 +21,7 @@ class ASMEnv(gym.Env):
 
     def __init__(self, num_agents, episode_length=5000,
             subsidy_timesteps=1000, evict_every=40,
-            subsidy_prob_amount=0.2, mining_prob_bounds=[0.4, 0.75], alpha=20,
+            subsidy_prob_amount=0.5, mining_prob_bounds=[0.4, 0.75], alpha=20,
             is_global_obs=True, reset_mining_probs_every_ep=True):
         super(ASMEnv, self).__init__()
 
@@ -253,6 +253,15 @@ class ASMEnv(gym.Env):
                     break
         obs = self.get_observations()
         return obs
+
+
+    def get_cumulative_mining_amount(self):
+        return np.sum(self.world_state[:, :self.mining_height, 0])
+
+
+    def get_cumulative_farming_amount(self):
+        return np.sum(self.world_state[:, -self.farming_height:, 0])
+
 
     def render(self, mode="human", close=False):
         # render environment to the screen

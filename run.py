@@ -34,11 +34,11 @@ if __name__ == '__main__':
 
     epochs = 50 # number of epochs
     episodes = 10000 # max iterations in single epoch
-    steps_per_episode = 500
+    steps_per_episode = 1000
     num_agents = 3
 
     env = ASMEnv(num_agents=num_agents, episode_length=steps_per_episode,
-        subsidy_timesteps=steps_per_episode//10, evict_every=75)
+        subsidy_timesteps=steps_per_episode//10, evict_every=25)
     #agents = [RandomAgent(env.action_space[0]) for _ in range(num_agents)]
     # these agents require strings for actions
     actions = [str(i) for i in range(5)]
@@ -54,10 +54,11 @@ if __name__ == '__main__':
 
     for ep in range(epochs):
         print("Epoch number: %d" % ep)
-        done = False
         for t in range(episodes):
             print("Episode number: %d" % t)
+            done = False
             observation = env.reset()
+            cum_reward = [0] * num_agents
             reward = [0] * num_agents
             # one episode
             while not done:
@@ -68,9 +69,11 @@ if __name__ == '__main__':
                     q_agent_obs = observation[i].tobytes() # make hashable
                     agent_action = agents[i].act(q_agent_obs, reward[i]) # this probably wont converge
                     actions.append(int(agent_action))
-
                 observation, reward, done, info = env.step(actions)
+                for i in range(num_agents):
+                    cum_reward[i] += reward[i]
                 #time.sleep(1) # for testing purposes; remove for faster episodes
+            print("Cum reward: ", cum_reward)
             for agent in agents:
                 agent.end_of_episode()
 
