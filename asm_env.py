@@ -40,7 +40,7 @@ class ASMEnv(gym.Env):
         #self.action_space = spaces.MultiDiscrete([NUM_AGENTS, 5])
         self._action_space = [spaces.Discrete(5) for _ in range(self.num_agents)]
         self.global_obs = global_obs
-        # observations are mining history and agent coordinates
+        # observations are mining history and agent coordinates and evictions
         if self.global_obs:
             single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=terminate_after,
                 shape=(self.width, self.height, 2), dtype=np.int32),
@@ -79,7 +79,7 @@ class ASMEnv(gym.Env):
         # execute one timestep
         self.step_count += 1
         assert(len(actions) == self.num_agents)
-        reward = [None for _ in range(self.num_agents)]
+        reward = [0 for _ in range(self.num_agents)]
         # perform evictions every evict_every timesteps
         if self.step_count % self.evict_every == 0:
             evicted_agent = self.evict()
@@ -116,7 +116,7 @@ class ASMEnv(gym.Env):
         done = self.step_count >= self.terminate_after
         info = [{} for _ in range(self.num_agents)]
 
-        return obs, reward, done, {}
+        return obs, reward, done, info
 
     def mine_or_farm(self, coords):
         grid_type = self.get_grid_type(coords)
@@ -144,13 +144,14 @@ class ASMEnv(gym.Env):
         return np.random.binomial(n=1.0, p=prob_of_success)
 
     def get_farming_reward(self, coords):
-        prob_of_success = self.step_count/self.terminate_after
+        prob_of_success = self.step_count/float(self.terminate_after)
         if self.step_count < self.subsidy_timesteps:
             prob_of_success_subsidized = min(prob_of_success + self.subsidy_prob_amount, 1.0)
             return np.random.binomial(n=1.0, p=prob_of_success_subsidized)
         return np.random.binomial(n=1.0, p=prob_of_success)
 
     def get_observations(self):
+        obs = []
         if self.global_obs:
             return [(self.world_state, self.evictions)
                 for _ in range(self.num_agents)]
@@ -201,8 +202,8 @@ class ASMEnv(gym.Env):
         self.step_count = 0
         self.mining_probs = (self.mining_prob_bounds[1] -
             self.mining_prob_bounds[0]) * np.random.random(
-            size=(self.width, self.mining_height)) + self.mining_prob_bounds[0]
-        self.mining_probs[:, :self.mining_height] = 0
+            size=(self.width, self.height)) + self.mining_prob_bounds[0]
+        self.mining_probs[:, self.mining_height:] = 0
         # initialize world state - for each grid theres a mining history, and
         # indication of which agent if any is in the grid (0 to
         # NUM_AGENTS-1 to represent each agent, and -1 if no agent)
