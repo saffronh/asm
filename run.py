@@ -62,7 +62,7 @@ if __name__ == '__main__':
             reward = [0] * num_agents
             # one episode
             while not done:
-                #env.render()
+                env.render()
                 actions = []
                 for i in range(num_agents):
                     # observation

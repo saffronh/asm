@@ -3,6 +3,7 @@ from gym import spaces
 
 import numpy as np
 import matplotlib.pyplot as plt
+import drawnow
 
 # grid type enums
 MINING = 1
@@ -269,6 +270,7 @@ class ASMEnv(gym.Env):
                     self.world_state[x,  y, 1] = ind
                     self.agent_positions[ind, :] = x, y
                     break
+        drawnow.figure(figsize=(7,7))
         obs = self.get_observations()
         return obs
 
@@ -281,14 +283,14 @@ class ASMEnv(gym.Env):
         return np.sum(self.world_state[:, -self.farming_height:, 0])
 
 
+    def update_drawnow(self):
+        rgb_arr = self.get_rgb()
+        plt.imshow(rgb_arr)
+
+
     def render(self, mode="human", filename=None, close=False):
         """ Creates an image of the map to plot or save."""
-        rgb_arr = self.get_rgb()
-        plt.imshow(rgb_arr, interpolation='nearest')
-        if filename is None:
-            plt.show()
-        else:
-            plt.savefig(filename)
+        drawnow.drawnow(self.update_drawnow, stop_on_close=True)
 
 
     def get_rgb(self):
