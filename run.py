@@ -7,7 +7,7 @@ import sys
 import gym
 from gym import wrappers, logger
 
-from asm_env import ASMEnv
+from asm_env import ASMEnv, Government
 from QLearningAgentClass import QLearningAgent
 
 
@@ -37,8 +37,8 @@ if __name__ == '__main__':
     steps_per_episode = 1000
     num_agents = 3
 
-    env = ASMEnv(num_agents=num_agents, episode_length=steps_per_episode,
-        subsidy_timesteps=steps_per_episode//5, evict_every=25)
+    govt = Government(subsidy_timesteps=(steps_per_episode/5), evict_every=25)
+    env = ASMEnv(num_agents=num_agents, govt=govt, episode_length=steps_per_episode)
     #agents = [RandomAgent(env.action_space[0]) for _ in range(num_agents)]
     # these agents require strings for actions
     actions = [str(i) for i in range(5)]

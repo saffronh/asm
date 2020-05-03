@@ -37,7 +37,7 @@ def one_hot_to_index(arr):
 
 class Government(object):
 
-    def __init__(subsidy_timesteps=250, subsidy_prob_amount=0.5,
+    def __init__(self, subsidy_timesteps=250, subsidy_prob_amount=0.5,
             evict_every=40):
         self._subsidy_timesteps = subsidy_timesteps
         self._subsidy_prob_amount = subsidy_prob_amount
