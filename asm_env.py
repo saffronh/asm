@@ -34,21 +34,46 @@ def one_hot_to_index(arr):
     arr_as_list = list(np.reshape(arr, -1))
     return arr_as_list.index(1)
 
+
+class Government(object):
+
+    def __init__(subsidy_timesteps=250, subsidy_prob_amount=0.5,
+            evict_every=40):
+        self._subsidy_timesteps = subsidy_timesteps
+        self._subsidy_prob_amount = subsidy_prob_amount
+        self._evict_every = evict_every
+
+    @property
+    def subsidy_timesteps(self):
+        return self._subsidy_timesteps
+
+    @property
+    def subsidy_prob_amount(self):
+        return self._subsidy_prob_amount
+
+    @property
+    def evict_every(self):
+        return self._evict_every
+
+
 class ASMEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, num_agents, episode_length=1000,
-            subsidy_timesteps=250, evict_every=40,
-            subsidy_prob_amount=0.5, mining_prob_bounds=[0.4, 0.75], alpha=20,
+    def __init__(self, num_agents, govt, episode_length=1000,
+            mining_prob_bounds=[0.4, 0.75], alpha=20,
             is_global_obs=True, reset_mining_probs_every_ep=True):
         super(ASMEnv, self).__init__()
 
         self._num_agents = num_agents
+        self.govt = govt
+
+        # update with the government's policy parameters
+        self.subsidy_timesteps = govt.subsidy_timesteps
+        self.subsidy_prob_amount = govt.subsidy_prob_amount
+        self.evict_every = govt.evict_every
+
         self.episode_length = episode_length
-        self.subsidy_timesteps = subsidy_timesteps
-        self.evict_every = evict_every
-        self.subsidy_prob_amount = subsidy_prob_amount
         self.mining_prob_bounds = mining_prob_bounds
         self.is_global_obs = is_global_obs # whether the observation is global
         self.reset_mining_probs_every_ep = reset_mining_probs_every_ep
