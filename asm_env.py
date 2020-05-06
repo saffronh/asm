@@ -37,7 +37,7 @@ def one_hot_to_index(arr):
 
 class Government(object):
 
-    def __init__(self, subsidy_timesteps=250, subsidy_prob_amount=0.5,
+    def __init__(self, subsidy_timesteps=250, subsidy_prob_amount=0.4,
             evict_every=40):
         self._subsidy_timesteps = subsidy_timesteps
         self._subsidy_prob_amount = subsidy_prob_amount
@@ -79,10 +79,10 @@ class ASMEnv(gym.Env):
         self.reset_mining_probs_every_ep = reset_mining_probs_every_ep
         self.alpha = alpha # tweaks farming reward curve y=x/x+a
 
-        self.width = 20
-        self.height = 20
-        self.mining_height = 8
-        self.farming_height = 8
+        self.width = 5
+        self.height = 10
+        self.mining_height = 4
+        self.farming_height = 4
         self.obs_width = 7
         self.obs_height = 7
 
@@ -161,11 +161,11 @@ class ASMEnv(gym.Env):
                 # check to see the new position is within bounds, and another
                 # agent hasn't moved into that position, else stay put
                 if (new_pos[0] < self.width and new_pos[0] >= 0) and (new_pos[1] < self.height and new_pos[1] >= 0):
-                    if self.world_state[new_pos[0], new_pos[1], 1] < 0:
+                    if self.world_state[new_pos[0], new_pos[1], -1] < 0:
                         # update agent position
-                        self.world_state[new_pos[0], new_pos[1], 1] = ind
+                        self.world_state[new_pos[0], new_pos[1], -1] = ind
                         # remove from old pos
-                        self.world_state[curr_agent_position[0], curr_agent_position[1], 1] = -1
+                        self.world_state[curr_agent_position[0], curr_agent_position[1], -1] = -1
                         self.agent_positions[ind, :] = new_pos[0], new_pos[1]
 
         obs = self.get_observations()
@@ -180,14 +180,14 @@ class ASMEnv(gym.Env):
             reward = self.get_mining_reward(coords)
             # keep track of mining history if successfully mined
             if reward:
-                prev_num_miners = self.world_state[coords[0], coords[1], 0]
-                self.world_state[coords[0], coords[1], 0] = prev_num_miners + 1
+                prev_amount = self.world_state[coords[0], coords[1], agent_id]
+                self.world_state[coords[0], coords[1], agent_id] = prev_amount + 1
         elif grid_type == FARMING:
             reward = self.get_farming_reward(coords, agent_id)
             # keep track of farming history if successfully farmed
             if reward:
-                prev_num_farmers = self.world_state[coords[0], coords[1], 0]
-                self.world_state[coords[0], coords[1], 0] = prev_num_farmers + 1
+                prev_amount = self.world_state[coords[0], coords[1], agent_id]
+                self.world_state[coords[0], coords[1], agent_id] = prev_amount + 1
         else:
             reward = 0
         return reward
@@ -208,7 +208,7 @@ class ASMEnv(gym.Env):
     def get_farming_reward(self, coords, agent_id):
         x = self.agent_farming_history[agent_id]
         prob_of_success = x/float(x+self.alpha)
-        if self.step_count < self.subsidy_timesteps:
+        if prob_of_success < 0.3:
             prob_of_success_subsidized = min(prob_of_success + self.subsidy_prob_amount, 1.0)
             return np.random.binomial(n=1.0, p=prob_of_success_subsidized)
         return np.random.binomial(n=1.0, p=prob_of_success)
@@ -217,7 +217,7 @@ class ASMEnv(gym.Env):
         # obs = []
         # for ind in range(self.num_agents):
         #     if self.is_global_obs:
-        #         agent_obs = (self.world_state[:, :, 1], self.evictions)
+        #         agent_obs = (self.world_state[:, :, -1], self.evictions)
         #     else:
         #         x, y = self.agent_positions[ind, :]
         #         local_height_rad = self.observation_height//2
@@ -225,7 +225,7 @@ class ASMEnv(gym.Env):
         #         local_obs = self.world_state[
         #             x-local_width_rad:x+local_width_rad+1,
         #             y-local_height_rad:x+local_height_rad+1,
-        #             1]
+        #             -1]
         #         agent_obs = (local_obs, self.evictions)
         #     obs.append(agent_obs)
         # return obs
@@ -246,11 +246,11 @@ class ASMEnv(gym.Env):
                     y = self.height - y_relative - 1
                     # check that its the farming side
                     assert(self.get_grid_type((x, y)) == FARMING)
-                    if self.world_state[x, y, 1] < 0:
+                    if self.world_state[x, y, -1] < 0:
                         # successful farming side spot found; update positions
-                        self.world_state[x, y, 1] = ind
+                        self.world_state[x, y, -1] = ind
                         # set previous position to -1
-                        self.world_state[coords[0], coords[1], 1] = -1
+                        self.world_state[coords[0], coords[1], -1] = -1
                         self.agent_positions[ind, :] = x, y
                         # note the eviction
                         self.evictions = np.zeros(
@@ -271,13 +271,13 @@ class ASMEnv(gym.Env):
         self.step_count = 0
         if self.reset_mining_probs_every_ep:
             self.reset_mining_probs()
-        # initialize world state - for each grid theres a mining/farming history, and
-        # indication of which agent if any is in the grid (0 to
-        # NUM_AGENTS-1 to represent each agent, and -1 if no agent)
+        # initialize world state - for each grid theres a mining/farming history
+        # for each agent, and indication of which agent if any is in the grid (0
+        # to NUM_AGENTS-1 to represent each agent, and -1 if no agent)
         self.world_state = np.zeros(
-            (self.width, self.height, 2), dtype=np.int32)
+            (self.width, self.height, self.num_agents + 1), dtype=np.int32)
         # initialize with "no agents" anywhere
-        self.world_state[:, :, 1] = -1
+        self.world_state[:, :, -1] = -1
         # evictions in previous timestep
         self.evictions = np.zeros((self.num_agents,), dtype=np.int32)
         # history of farming for each agent
@@ -290,22 +290,28 @@ class ASMEnv(gym.Env):
                 x = np.random.choice(self.width)
                 y = np.random.choice(self.height)
                 # check to see another agent hasn't beenn initialized in that position
-                if self.world_state[x, y, 1] < 0:
+                if self.world_state[x, y, -1] < 0:
                     # update agent position
-                    self.world_state[x,  y, 1] = ind
+                    self.world_state[x,  y, -1] = ind
                     self.agent_positions[ind, :] = x, y
                     break
-        drawnow.figure(figsize=(7,7))
+        #drawnow.figure(figsize=(7,7))
         obs = self.get_observations()
         return obs
 
 
-    def get_cumulative_mining_amount(self):
-        return np.sum(self.world_state[:, :self.mining_height, 0])
+    def get_cumulative_mining_amount(self, agent_id=None):
+        if agent_id is None:
+            return np.sum(self.world_state[:, :self.mining_height, :self.num_agents])
+        else:
+            return np.sum(self.world_state[:, :self.mining_height, agent_id])
 
 
-    def get_cumulative_farming_amount(self):
-        return np.sum(self.world_state[:, -self.farming_height:, 0])
+    def get_cumulative_farming_amount(self, agent_id=None):
+        if agent_id is None:
+            return np.sum(self.world_state[:, -self.farming_height:, :self.num_agents])
+        else:
+            return np.sum(self.world_state[:, -self.farming_height:, agent_id])
 
 
     def update_drawnow(self):
@@ -313,9 +319,14 @@ class ASMEnv(gym.Env):
         plt.imshow(rgb_arr)
 
 
-    def render(self, mode="human", filename=None, close=False):
+    def render(self, filename=None, stop_on_close=True):
         """ Creates an image of the map to plot or save."""
-        drawnow.drawnow(self.update_drawnow, stop_on_close=True)
+        if filename is None:
+            drawnow.drawnow(self.update_drawnow, stop_on_close=stop_on_close)
+        else:
+            rgb_arr = self.get_rgb()
+            plt.imshow(rgb_arr, interpolation='nearest')
+            plt.savefig(filename)
 
 
     def get_rgb(self):
@@ -325,12 +336,12 @@ class ASMEnv(gym.Env):
             for j in range(self.height):
                 grid_type = self.get_grid_type((i, j))
                 if grid_type == MINING:
-                    mine_amount = self.world_state[i, j, 0]
+                    mine_amount = np.sum(self.world_state[i, j, :self.num_agents])
                     scale = max((500-mine_amount)/500, 0.3)
                     rgb_val = [x * scale for x in DEFAULT_COLOURS['M']]
                     rgb_arr[i, j, :] = rgb_val
                 elif grid_type == FARMING:
-                    farm_amount = self.world_state[i, j, 0]
+                    farm_amount = np.sum(self.world_state[i, j, :self.num_agents])
                     scale = max((500-farm_amount)/500, 0.3)
                     rgb_val = [x * scale for x in DEFAULT_COLOURS['F']]
                     rgb_arr[i, j, :] = rgb_val
