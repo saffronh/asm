@@ -37,15 +37,15 @@ def one_hot_to_index(arr):
 
 class Government(object):
 
-    def __init__(self, subsidy_timesteps=250, subsidy_prob_amount=0.4,
+    def __init__(self, subsidy_below=0.3, subsidy_prob_amount=0.4,
             evict_every=40):
-        self._subsidy_timesteps = subsidy_timesteps
+        self.subsidy_below = subsidy_below
         self._subsidy_prob_amount = subsidy_prob_amount
         self._evict_every = evict_every
 
     @property
-    def subsidy_timesteps(self):
-        return self._subsidy_timesteps
+    def subsidy_below(self):
+        return self._subsidy_below
 
     @property
     def subsidy_prob_amount(self):
@@ -69,7 +69,7 @@ class ASMEnv(gym.Env):
         self.govt = govt
 
         # update with the government's policy parameters
-        self.subsidy_timesteps = govt.subsidy_timesteps
+        self.subsidy_below = govt.subsidy_below
         self.subsidy_prob_amount = govt.subsidy_prob_amount
         self.evict_every = govt.evict_every
 
@@ -208,7 +208,7 @@ class ASMEnv(gym.Env):
     def get_farming_reward(self, coords, agent_id):
         x = self.agent_farming_history[agent_id]
         prob_of_success = x/float(x+self.alpha)
-        if prob_of_success < 0.3:
+        if prob_of_success < self.subsidy_below:
             prob_of_success_subsidized = min(prob_of_success + self.subsidy_prob_amount, 1.0)
             return np.random.binomial(n=1.0, p=prob_of_success_subsidized)
         return np.random.binomial(n=1.0, p=prob_of_success)

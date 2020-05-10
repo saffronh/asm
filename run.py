@@ -42,16 +42,16 @@ if __name__ == '__main__':
         'farming_amount']
 
     epochs = 10 # number of epochs
-    episodes = 10000 # max iterations in single epoch
+    episodes = 2500 # max iterations in single epoch
     steps_per_episode = 2000
     num_agents = 3
     mining_prob_bounds = [0.55, 0.75]
-    alpha = 120
-    subsidy_timesteps = steps_per_episode//5
-    evict_every = 50
-    subsidy_prob_amount = 0.25
+    alpha = 20
+    subsidy_below = 0.3
+    evict_every = 25
+    subsidy_prob_amount = 0.1
 
-    govt = Government(subsidy_timesteps=subsidy_timesteps,
+    govt = Government(subsidy_below=subsidy_below,
             evict_every=evict_every, subsidy_prob_amount=subsidy_prob_amount)
     env = ASMEnv(num_agents=num_agents, govt=govt, episode_length=steps_per_episode,
         mining_prob_bounds=mining_prob_bounds, alpha=alpha)
