@@ -35,6 +35,7 @@ class QLearningAgent(Agent):
         self.default_q = default_q # 0 # 1 / (1 - self.gamma)
         self.explore = explore
         self.custom_q_init = custom_q_init
+        self._action_history = []  # store actions taken
 
         # Q Function:
         if self.custom_q_init:
@@ -46,6 +47,10 @@ class QLearningAgent(Agent):
         # Val: dict
             #   Key: action
             #   Val: q-value
+
+    @property
+    def action_history(self):
+        return self._action_history
 
 
     def get_parameters(self):
@@ -99,6 +104,7 @@ class QLearningAgent(Agent):
         if learning and self.anneal:
             self._anneal()
 
+        self._action_history.append(action)
         return action
 
     def epsilon_greedy_q_policy(self, state):
@@ -260,6 +266,7 @@ class QLearningAgent(Agent):
         '''
         if self.anneal:
             self._anneal()
+        self._action_history = []
         Agent.end_of_episode(self)
 
     def print_v_func(self):

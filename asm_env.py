@@ -39,7 +39,7 @@ class Government(object):
 
     def __init__(self, subsidy_below=0.3, subsidy_prob_amount=0.4,
             evict_every=40):
-        self.subsidy_below = subsidy_below
+        self._subsidy_below = subsidy_below
         self._subsidy_prob_amount = subsidy_prob_amount
         self._evict_every = evict_every
 
