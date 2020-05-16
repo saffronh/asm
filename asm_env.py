@@ -87,7 +87,7 @@ class ASMEnv(gym.Env):
         self.obs_height = 7
 
         # action space is a list of gym Spaces, length num_agents
-        self._action_space = [spaces.Discrete(5) for _ in range(self.num_agents)]
+        self._action_space = [spaces.Discrete(6) for _ in range(self.num_agents)]
         # observations are agent coordinates and evictions
         # if self.is_global_obs:
         #     single_agent_obs = spaces.Tuple((spaces.Box(low=0, high=episode_length,
@@ -153,8 +153,9 @@ class ASMEnv(gym.Env):
             agent_action = actions[ind]
             curr_agent_position = self.agent_positions[ind, :]
             if agent_action == 4:
-                agent_reward = self.mine_or_farm(curr_agent_position, ind)
-                reward[ind] = agent_reward
+                reward[ind] = self.mine(curr_agent_position, ind)
+            elif agent_action == 5:
+                reward[ind] = self.farm(curr_agent_position, ind)
             else:
                 x_move, y_move = self.moves[agent_action]
                 new_pos = curr_agent_position[0] + x_move, curr_agent_position[1] + y_move
@@ -174,7 +175,7 @@ class ASMEnv(gym.Env):
 
         return obs, reward, done, info
 
-    def mine_or_farm(self, coords, agent_id):
+    def mine(self, coords, agent_id):
         grid_type = self.get_grid_type(coords)
         if grid_type == MINING:
             reward = self.get_mining_reward(coords)
@@ -182,15 +183,24 @@ class ASMEnv(gym.Env):
             if reward:
                 prev_amount = self.world_state[coords[0], coords[1], agent_id]
                 self.world_state[coords[0], coords[1], agent_id] = prev_amount + 1
-        elif grid_type == FARMING:
+        else:
+            reward = 0
+        return reward
+
+
+    def farm(self, coords, agent_id):
+        grid_type = self.get_grid_type(coords)
+        if grid_type == FARMING:
             reward = self.get_farming_reward(coords, agent_id)
             # keep track of farming history if successfully farmed
             if reward:
                 prev_amount = self.world_state[coords[0], coords[1], agent_id]
                 self.world_state[coords[0], coords[1], agent_id] = prev_amount + 1
+                self.agent_farming_history[agent_id] += 1
         else:
             reward = 0
         return reward
+
 
     def get_grid_type(self, coords):
         x, y = coords
@@ -212,6 +222,11 @@ class ASMEnv(gym.Env):
             prob_of_success_subsidized = min(prob_of_success + self.subsidy_prob_amount, 1.0)
             return np.random.binomial(n=1.0, p=prob_of_success_subsidized)
         return np.random.binomial(n=1.0, p=prob_of_success)
+
+
+    def get_agent_positions(self):
+        return self.agent_positions
+
 
     def get_observations(self):
         # obs = []

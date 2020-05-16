@@ -14,6 +14,18 @@ from asm_env import ASMEnv, Government
 from QLearningAgentClass import QLearningAgent
 
 
+def get_avg_dists(l):
+    # get the average distance from x,y-coords (of an agent) to other agents
+    # (positions represented by a list of x,y coords of the other agents)
+    avg_dists = []
+    for i, pos in enumerate(l):
+        dists_to_others = [np.sqrt((pos[0]-other_pos[0])**2 + (pos[1]-other_pos[1])**2)
+                for j, other_pos in enumerate(l) if i != j]
+        avg = sum(dists_to_others)/len(dists_to_others)
+        avg_dists.append(avg)
+    return avg_dists
+
+
 class RandomAgent(object):
     """The world's simplest agent!"""
     def __init__(self, action_space):
@@ -40,10 +52,12 @@ if __name__ == '__main__':
         'episode_length', 'num_agents', 'subsidy_below', 'evict_every',
         'subsidy_prob_amount', 'mining_prob_lower_bound', 'mining_prob_upper_bound',
         'farming_alpha', 'agent_id', 'cumulative_reward', 'mining_amount',
-        'farming_amount', 'a0', 'a1', 'a2', 'a3', 'a4']
+        'farming_amount', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5',
+        #'avg_dist'
+        ]
 
-    epochs = 10 # number of epochs
-    episodes = 2000  # max iterations in single epoch
+    epochs = 1 # number of epochs
+    episodes = 750  # max iterations in single epoch
     steps_per_episode = 2000
     num_agents = 3
     mining_prob_bounds = [0.55, 0.75]
@@ -51,8 +65,8 @@ if __name__ == '__main__':
 
     #agents = [RandomAgent(env.action_space[0]) for _ in range(num_agents)]
     # these agents require strings for actions
-    actions = [str(i) for i in range(5)]
-    agents = [QLearningAgent(actions=actions) for _ in range(num_agents)]
+    action_set = [str(i) for i in range(6)]
+    agents = [QLearningAgent(actions=action_set, explore="uniform") for _ in range(num_agents)]
 
     # # You provide the directory to write to (can be an existing
     # # directory, including one with existing data -- all monitor files
@@ -63,14 +77,18 @@ if __name__ == '__main__':
     # env.seed(0)
 
     varying_params = [
-        {'evict_every': 20, 'subsidy_prob_amount': 0.1, 'alpha': 20},
-        {'evict_every': 20, 'subsidy_prob_amount': 0.25, 'alpha': 20},
-        {'evict_every': 50, 'subsidy_prob_amount': 0.1, 'alpha': 20},
-        {'evict_every': 50, 'subsidy_prob_amount': 0.25, 'alpha': 20},
-        {'evict_every': 20, 'subsidy_prob_amount': 0.1, 'alpha': 120},
-        {'evict_every': 20, 'subsidy_prob_amount': 0.25, 'alpha': 120},
-        {'evict_every': 25, 'subsidy_prob_amount': 0.1, 'alpha': 120},
-        {'evict_every': 25, 'subsidy_prob_amount': 0.25, 'alpha': 120},
+        {'evict_every': 15, 'subsidy_prob_amount': 0.1, 'alpha': 20},
+        {'evict_every': 15, 'subsidy_prob_amount': 0.2, 'alpha': 20},
+        {'evict_every': 30, 'subsidy_prob_amount': 0.1, 'alpha': 20},
+        {'evict_every': 30, 'subsidy_prob_amount': 0.2, 'alpha': 20},
+        {'evict_every': 40, 'subsidy_prob_amount': 0.1, 'alpha': 20},
+        {'evict_every': 40, 'subsidy_prob_amount': 0.2, 'alpha': 20},
+        {'evict_every': 15, 'subsidy_prob_amount': 0.1, 'alpha': 120},
+        {'evict_every': 15, 'subsidy_prob_amount': 0.2, 'alpha': 120},
+        {'evict_every': 30, 'subsidy_prob_amount': 0.1, 'alpha': 120},
+        {'evict_every': 30, 'subsidy_prob_amount': 0.2, 'alpha': 120},
+        {'evict_every': 40, 'subsidy_prob_amount': 0.1, 'alpha': 120},
+        {'evict_every': 40, 'subsidy_prob_amount': 0.2, 'alpha': 120},
     ]
 
     for ep in range(epochs):
@@ -112,22 +130,29 @@ if __name__ == '__main__':
                 observation = env.reset()
                 cum_reward = [0] * num_agents
                 reward = [0] * num_agents
+                avg_dists = [[] for _ in range(num_agents)]
                 # one episode
                 while not done:
                     actions = []
                     for i in range(num_agents):
                         # observation
                         q_agent_obs = observation[i].tobytes() # make hashable
-                        agent_action = agents[i].act(q_agent_obs, reward[i]) # this probably wont converge
+                        agent_action = agents[i].act(q_agent_obs, reward[i], learning=True) # this probably wont converge
                         actions.append(int(agent_action))
                     observation, reward, done, info = env.step(actions)
+
+                    dists = get_avg_dists(env.get_agent_positions())
                     for i in range(num_agents):
                         cum_reward[i] += reward[i]
+                        avg_dists[i].append(dists[i])
+
                     #time.sleep(1) # for testing purposes; remove for faster episodes
 
                 print("Cumulative reward: ", cum_reward)
                 print("Mining amount: ", env.get_cumulative_mining_amount())
                 print("Farming amount: ", env.get_cumulative_farming_amount())
+
+                #agent_dists = [sum(dists)/len(dists) for dists in avg_dists]
 
                 for i in range(num_agents):
                     agent_results = results_dict.copy()
@@ -135,17 +160,23 @@ if __name__ == '__main__':
                     agent_results['cumulative_reward'] = cum_reward[i]
                     agent_results['mining_amount'] = env.get_cumulative_mining_amount(i)
                     agent_results['farming_amount'] = env.get_cumulative_farming_amount(i)
+                    #agent_results['avg_dist'] = agent_dists[i]
                     action_history_count = Counter(agents[i].action_history)
+
                     for k, v in action_history_count.items():
                         agent_results['a' + k] = v
                     results.append(agent_results)  # append to master list of results
                     agents[i].end_of_episode()
 
+
+            for agent in agents:
+                agent.reset()
+
         results_df = pd.DataFrame(data=results, columns=col_names)
         results_df.to_pickle(f'results_{int(time.time())}.pkl')
 
-        for agent in agents:
-            agent.reset()
+        #for agent in agents:
+        #    agent.reset()
 
 
     env.close()

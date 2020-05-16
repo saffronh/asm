@@ -12,7 +12,7 @@ from AgentClass import Agent
 class QLearningAgent(Agent):
     ''' Implementation for a Q Learning Agent '''
 
-    def __init__(self, actions, name="Q-learning", alpha=0.1, gamma=0.99, epsilon=0.1, explore="uniform", anneal=False, custom_q_init=None, default_q=0):
+    def __init__(self, actions, name="Q-learning", alpha=0.1, gamma=0.9, epsilon=0.05, explore="uniform", anneal=False, custom_q_init=None, default_q=0):
         '''
         Args:
             actions (list): Contains strings denoting the actions.
@@ -51,6 +51,10 @@ class QLearningAgent(Agent):
     @property
     def action_history(self):
         return self._action_history
+
+
+    def get_q_table(self):
+        return self.q_func
 
 
     def get_parameters(self):
